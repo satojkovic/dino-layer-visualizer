@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.jpg
+*.jpeg
+*.png
+*.gif
+!app/static/

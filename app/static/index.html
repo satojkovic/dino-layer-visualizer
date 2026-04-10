@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DINOv2 PCA Visualizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      color: #f8fafc;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    /* Drop zone */
+    #dropzone {
+      width: 100%;
+      max-width: 480px;
+      border: 2px dashed #475569;
+      border-radius: 12px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    #dropzone:hover, #dropzone.drag-over {
+      border-color: #6366f1;
+      background: #1e1f2e;
+    }
+
+    #dropzone svg {
+      width: 48px;
+      height: 48px;
+      color: #64748b;
+      margin-bottom: 0.75rem;
+    }
+
+    #dropzone p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    #dropzone p strong {
+      color: #818cf8;
+    }
+
+    #fileInput { display: none; }
+
+    /* Button */
+    #uploadBtn {
+      margin-top: 1.25rem;
+      padding: 0.6rem 1.8rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: none;
+    }
+
+    #uploadBtn:hover { background: #4f46e5; }
+    #uploadBtn:disabled { background: #3730a3; cursor: not-allowed; }
+
+    /* Spinner */
+    #spinner {
+      display: none;
+      margin-top: 1.5rem;
+      align-items: center;
+      gap: 0.75rem;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    #spinner.visible { display: flex; }
+
+    .spin {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #334155;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    #results {
+      display: none;
+      margin-top: 2rem;
+      width: 100%;
+      max-width: 960px;
+      gap: 1.5rem;
+      flex-direction: row;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    #results.visible { display: flex; }
+
+    .result-card {
+      flex: 1 1 380px;
+      background: #1e293b;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .result-card h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #334155;
+    }
+
+    .result-card img {
+      width: 100%;
+      display: block;
+    }
+
+    /* Error */
+    #error {
+      display: none;
+      margin-top: 1.25rem;
+      padding: 0.75rem 1.25rem;
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      max-width: 480px;
+      width: 100%;
+    }
+
+    #error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <h1>DINOv2 PCA Visualizer</h1>
+  <p class="subtitle">Upload an image to visualize DINOv2 patch features via PCA</p>
+
+  <div id="dropzone">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+    </svg>
+    <p><strong>Click to upload</strong> or drag and drop</p>
+    <p>PNG, JPG, WEBP</p>
+    <input type="file" id="fileInput" accept="image/*" />
+  </div>
+
+  <button id="uploadBtn">Visualize</button>
+
+  <div id="spinner">
+    <div class="spin"></div>
+    <span>Running DINOv2 + PCA… this may take a moment on CPU</span>
+  </div>
+
+  <div id="error"></div>
+
+  <div id="results">
+    <div class="result-card">
+      <h2>Original</h2>
+      <img id="imgOriginal" src="" alt="Original image" />
+    </div>
+    <div class="result-card">
+      <h2>PCA Visualization</h2>
+      <img id="imgVis" src="" alt="PCA visualization" />
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const spinner = document.getElementById('spinner');
+    const results = document.getElementById('results');
+    const errorBox = document.getElementById('error');
+    const imgOriginal = document.getElementById('imgOriginal');
+    const imgVis = document.getElementById('imgVis');
+
+    let selectedFile = null;
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) setFile(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) setFile(fileInput.files[0]);
+    });
+
+    function setFile(file) {
+      selectedFile = file;
+      dropzone.querySelector('p').textContent = file.name;
+      uploadBtn.style.display = 'inline-block';
+      hideError();
+      results.classList.remove('visible');
+    }
+
+    uploadBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      uploadBtn.disabled = true;
+      spinner.classList.add('visible');
+      hideError();
+      results.classList.remove('visible');
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      try {
+        const res = await fetch('/api/visualize', { method: 'POST', body: formData });
+        if (!res.ok) {
+          const detail = (await res.json()).detail ?? 'Unknown error';
+          throw new Error(detail);
+        }
+        const data = await res.json();
+        imgOriginal.src = 'data:image/png;base64,' + data.original;
+        imgVis.src = 'data:image/png;base64,' + data.visualization;
+        results.classList.add('visible');
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        spinner.classList.remove('visible');
+        uploadBtn.disabled = false;
+      }
+    });
+
+    function showError(msg) {
+      errorBox.textContent = 'Error: ' + msg;
+      errorBox.classList.add('visible');
+    }
+
+    function hideError() {
+      errorBox.classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
