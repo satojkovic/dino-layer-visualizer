@@ -33,25 +33,43 @@ async def index():
 
 
 @app.post("/api/visualize")
-async def visualize(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Uploaded file must be an image.")
-
+async def visualize(files: list[UploadFile] = File(...)):
     from PIL import Image
 
-    try:
-        data = await file.read()
-        image = Image.open(io.BytesIO(data)).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Could not read the uploaded image.")
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one image is required.")
 
-    patch_tokens, num_patches_h = extract_features(image)
-    vis_image = compute_pca_visualization(patch_tokens, num_patches_h)
+    for f in files:
+        if not f.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{f.filename}' is not an image.",
+            )
 
-    # Resize original to match visualization size for side-by-side display
-    original_resized = image.resize((vis_image.width, vis_image.height))
+    images = []
+    for f in files:
+        try:
+            data = await f.read()
+            images.append(Image.open(io.BytesIO(data)).convert("RGB"))
+        except Exception:
+            raise HTTPException(
+                status_code=400, detail=f"Could not read '{f.filename}'."
+            )
 
-    return JSONResponse({
-        "original": _image_to_base64(original_resized),
-        "visualization": _image_to_base64(vis_image),
-    })
+    # Extract features for all images
+    features = [extract_features(img) for img in images]
+    patch_tokens_list = [ft[0] for ft in features]
+    num_patches_h = features[0][1]
+
+    # Joint PCA over all images
+    vis_images = compute_pca_visualization(patch_tokens_list, num_patches_h)
+
+    results = []
+    for img, vis in zip(images, vis_images):
+        original_resized = img.resize((vis.width, vis.height))
+        results.append({
+            "original": _image_to_base64(original_resized),
+            "visualization": _image_to_base64(vis),
+        })
+
+    return JSONResponse({"results": results})

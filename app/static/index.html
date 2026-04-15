@@ -66,6 +66,32 @@
 
     #fileInput { display: none; }
 
+    /* File list */
+    #fileList {
+      margin-top: 0.75rem;
+      width: 100%;
+      max-width: 480px;
+      display: none;
+    }
+
+    #fileList.visible { display: block; }
+
+    #fileList ul {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    #fileList ul li {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+    }
+
     /* Button */
     #uploadBtn {
       margin-top: 1.25rem;
@@ -112,13 +138,18 @@
       margin-top: 2rem;
       width: 100%;
       max-width: 960px;
-      gap: 1.5rem;
-      flex-direction: row;
-      justify-content: center;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 2rem;
     }
 
     #results.visible { display: flex; }
+
+    .result-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
 
     .result-card {
       flex: 1 1 380px;
@@ -161,7 +192,7 @@
 </head>
 <body>
   <h1>DINOv2 PCA Visualizer</h1>
-  <p class="subtitle">Upload an image to visualize DINOv2 patch features via PCA</p>
+  <p class="subtitle">Upload one or more images to visualize DINOv2 patch features via joint PCA</p>
 
   <div id="dropzone">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,9 +200,11 @@
         d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
     </svg>
     <p><strong>Click to upload</strong> or drag and drop</p>
-    <p>PNG, JPG, WEBP</p>
-    <input type="file" id="fileInput" accept="image/*" />
+    <p>PNG, JPG, WEBP &mdash; multiple images supported</p>
+    <input type="file" id="fileInput" accept="image/*" multiple />
   </div>
+
+  <div id="fileList"><ul id="fileListItems"></ul></div>
 
   <button id="uploadBtn">Visualize</button>
 
@@ -182,16 +215,7 @@
 
   <div id="error"></div>
 
-  <div id="results">
-    <div class="result-card">
-      <h2>Original</h2>
-      <img id="imgOriginal" src="" alt="Original image" />
-    </div>
-    <div class="result-card">
-      <h2>PCA Visualization</h2>
-      <img id="imgVis" src="" alt="PCA visualization" />
-    </div>
-  </div>
+  <div id="results"></div>
 
   <script>
     const dropzone = document.getElementById('dropzone');
@@ -200,10 +224,10 @@
     const spinner = document.getElementById('spinner');
     const results = document.getElementById('results');
     const errorBox = document.getElementById('error');
-    const imgOriginal = document.getElementById('imgOriginal');
-    const imgVis = document.getElementById('imgVis');
+    const fileList = document.getElementById('fileList');
+    const fileListItems = document.getElementById('fileListItems');
 
-    let selectedFile = null;
+    let selectedFiles = [];
 
     dropzone.addEventListener('click', () => fileInput.click());
 
@@ -217,32 +241,43 @@
     dropzone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropzone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) setFile(file);
+      const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+      if (files.length) setFiles(files);
     });
 
     fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) setFile(fileInput.files[0]);
+      if (fileInput.files.length) setFiles([...fileInput.files]);
     });
 
-    function setFile(file) {
-      selectedFile = file;
-      dropzone.querySelector('p').textContent = file.name;
+    function setFiles(files) {
+      selectedFiles = files;
+
+      // Show file name list
+      fileListItems.innerHTML = '';
+      files.forEach(f => {
+        const li = document.createElement('li');
+        li.textContent = f.name;
+        fileListItems.appendChild(li);
+      });
+      fileList.classList.add('visible');
+
       uploadBtn.style.display = 'inline-block';
       hideError();
       results.classList.remove('visible');
+      results.innerHTML = '';
     }
 
     uploadBtn.addEventListener('click', async () => {
-      if (!selectedFile) return;
+      if (!selectedFiles.length) return;
 
       uploadBtn.disabled = true;
       spinner.classList.add('visible');
       hideError();
       results.classList.remove('visible');
+      results.innerHTML = '';
 
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      selectedFiles.forEach(f => formData.append('files', f));
 
       try {
         const res = await fetch('/api/visualize', { method: 'POST', body: formData });
@@ -251,8 +286,24 @@
           throw new Error(detail);
         }
         const data = await res.json();
-        imgOriginal.src = 'data:image/png;base64,' + data.original;
-        imgVis.src = 'data:image/png;base64,' + data.visualization;
+
+        data.results.forEach((item, idx) => {
+          const row = document.createElement('div');
+          row.className = 'result-row';
+
+          const origCard = document.createElement('div');
+          origCard.className = 'result-card';
+          origCard.innerHTML = `<h2>Original (${idx + 1})</h2><img src="data:image/png;base64,${item.original}" alt="Original ${idx + 1}" />`;
+
+          const visCard = document.createElement('div');
+          visCard.className = 'result-card';
+          visCard.innerHTML = `<h2>PCA Visualization (${idx + 1})</h2><img src="data:image/png;base64,${item.visualization}" alt="PCA ${idx + 1}" />`;
+
+          row.appendChild(origCard);
+          row.appendChild(visCard);
+          results.appendChild(row);
+        });
+
         results.classList.add('visible');
       } catch (err) {
         showError(err.message);

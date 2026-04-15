@@ -17,11 +17,12 @@ def get_model():
 
 
 def preprocess(image: Image.Image) -> torch.Tensor:
+    resize_size = IMAGE_SIZE + int(IMAGE_SIZE * 0.01) * 10  # 448 -> 488
     transform = T.Compose([
-        T.Resize(IMAGE_SIZE),
-        T.CenterCrop(IMAGE_SIZE),
         T.ToTensor(),
-        T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        T.Resize(resize_size),
+        T.CenterCrop(IMAGE_SIZE),
+        T.Normalize([0.5], [0.5]),
     ])
     return transform(image.convert("RGB")).unsqueeze(0)
 
