@@ -6,6 +6,8 @@ A web service that visualizes DINOv2 image features using PCA, based on the tech
 
 Upload an image and get a colorful visualization of its semantic structure. Regions with similar visual semantics (e.g., the head, legs, and body of an animal) are shown in similar colors, while the background is masked out in black.
 
+![result](assets/result.png)
+
 ## How it works
 
 DINOv2 divides the input image into 14×14 pixel patches and produces a feature vector for each patch. These patch tokens are then visualized via two-stage PCA:
