@@ -1,4 +1,4 @@
-# dino-layer-visualizer
+# dino-pca-visualizer
 
 A web service that visualizes DINOv2 image features using PCA, based on the technique described in [DINOv2 PCA Visualization](https://junukcha.github.io/code/2023/12/31/dinov2-pca-visualization/).
 
