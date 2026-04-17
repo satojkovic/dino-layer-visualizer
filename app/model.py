@@ -5,14 +5,17 @@ from PIL import Image
 PATCH_SIZE = 14
 IMAGE_SIZE = 448  # 14 * 32
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 _model = None
 
 
 def get_model():
     global _model
     if _model is None:
-        _model = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
+        _model = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
         _model.eval()
+        _model.to(DEVICE)
     return _model
 
 
@@ -24,7 +27,7 @@ def preprocess(image: Image.Image) -> torch.Tensor:
         T.CenterCrop(IMAGE_SIZE),
         T.Normalize([0.5], [0.5]),
     ])
-    return transform(image.convert("RGB")).unsqueeze(0)
+    return transform(image.convert("RGB")).unsqueeze(0).to(DEVICE)
 
 
 def extract_features(image: Image.Image) -> tuple[torch.Tensor, int]:
