@@ -43,11 +43,27 @@ def compute_pca_visualization(
     first_component = pca1.fit_transform(all_tokens)[:, 0]  # (num_images * N,)
     first_component_norm = _minmax_normalize(first_component)
 
+    # Determine mask direction using corner patches (corners are almost always background).
+    # If the majority of corner patches score above the threshold, the PCA component
+    # direction is inverted — use < threshold instead of > threshold.
+    corner_indices = [
+        0, num_patches_h - 1,
+        N - num_patches_h, N - 1,
+    ]
+    corner_scores = np.concatenate([
+        first_component_norm[i * N:(i + 1) * N][corner_indices]
+        for i in range(len(tokens_list))
+    ])
+    inverted = (corner_scores > FOREGROUND_THRESHOLD).mean() > 0.5
+
     # Split back per image and compute masks
     masks = []
     for i in range(len(tokens_list)):
         patch_scores = first_component_norm[i * N:(i + 1) * N]
-        masks.append(patch_scores > FOREGROUND_THRESHOLD)
+        mask = patch_scores > FOREGROUND_THRESHOLD
+        if inverted:
+            mask = ~mask
+        masks.append(mask)
 
     # --- Stage 2: RGB visualization on foreground patches from all images jointly ---
     fg_tokens_per_image = [tokens_list[i][masks[i]] for i in range(len(tokens_list))]
