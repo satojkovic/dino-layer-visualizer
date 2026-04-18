@@ -12,7 +12,7 @@ Upload an image and get a colorful visualization of its semantic structure. Regi
 
 DINOv2 divides the input image into 14×14 pixel patches and produces a feature vector for each patch. These patch tokens are then visualized via two-stage PCA:
 
-1. **Background removal** — PCA with 1 component is applied to all patch tokens. Patches whose first component falls below a threshold (0.6) are treated as background and excluded.
+1. **Background removal** — PCA with 1 component is applied to all patch tokens. The first component is min-max normalized, and a threshold (0.6) is used to separate foreground from background. Because PCA has sign ambiguity, the direction is automatically determined by inspecting the four corner patches of the image (top-left, top-right, bottom-left, bottom-right), which are almost always background: if more than half of those four patches score above the threshold, the component direction is considered inverted and the mask condition is flipped.
 2. **RGB visualization** — PCA with 3 components is applied to the foreground patches only. Fitting on foreground patches alone ensures that the components capture semantic differences *within* the object, rather than being dominated by the foreground/background split. The 3 components are mapped to R, G, and B channels respectively.
 
 ## Prerequisites
